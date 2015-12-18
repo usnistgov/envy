@@ -83,7 +83,7 @@ if os.path.exists(VLE_data_file):
     df = pandas.read_csv(VLE_data_file)
     mask = df['fluid[0] (-)'].isin(pair) & df['fluid[1] (-)'].isin(pair) & (df['Ncomp (-)'] == 2) & (df['p (Pa)'] < 1e15) & (df['p (Pa)'] > 0) & (~np.isnan(df['x[0] (-)'])) & (np.isnan(df['y[0] (-)']) | ((0 < df['y[0] (-)']) & (df['y[0] (-)'] < 1)))
     df = df[mask].copy()
-    T,p,x = df['T (K90)'], df['p (Pa)'], df['x[0] (-)']
+    T,p,x = df['T (K90)'], df['p (Pa)'], 1-df['x[0] (-)']
 
     jj = dict(x = T.tolist(), y = (np.log(p)*50).tolist(), z = (x*100).tolist(), r = np.ones_like(x).tolist())
 
