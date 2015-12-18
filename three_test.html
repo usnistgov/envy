@@ -1,0 +1,330 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<title>envy - The three.js phase envelope viewer</title>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
+        <style>
+            body {
+                font-family: Monospace;
+                background-color: #f0f0f0;
+                margin: 0px;
+                overflow: hidden;
+            }
+        </style>
+        
+	</head>
+	<body>
+        <!-- 
+        The copy_js.py script is used to collect the files from within threejs
+        -->
+        <script src="js/three.min.js"></script>
+        <script src="js/Lut.js"></script>
+        <script src="js/TextGeometry.js"></script>
+        <script src="js/FontUtils.js"></script>
+        <script src="js/OrbitControls.js"></script>
+        <script src="js/helvetiker_regular.typeface.js"></script>
+        <script src="js/stats.min.js"></script> 
+
+		<script>
+
+            // A list of things that can be clicked on
+            click_targets = [];
+            // Some THREE objects that need to be global
+            var controls, scene, camera, renderer, raycaster;
+
+            // The location of the mouse
+            var mouse = new THREE.Vector2();
+
+            init();
+            animate();
+
+            function init(){
+
+                container = document.createElement( 'div' );
+                document.body.appendChild( container );
+
+                var jsonloaders = document.createElement( 'div' );
+                jsonloaders.style.position = 'absolute';
+                jsonloaders.style.left = '100px';
+                jsonloaders.style.width = '100%';
+                jsonloaders.style.textAlign = 'left';
+                jsonloaders.innerHTML = 'Base loader: <input type="file" id="base" /> <br> Overlay loader: <input type="file" id="overlay" />';
+                container.appendChild( jsonloaders );
+                
+                // Instantiate the scene
+    			scene = new THREE.Scene();
+
+                add_axes();
+                add_axes_labels();
+
+                raycaster = new THREE.Raycaster();
+                var zmin = 0, xmin = 0, ymin = 0;
+
+                // Create a light emanating from the camera
+                var intensity = 1;
+                var no_light_distance = 0;
+                var decay = 0;
+                var pointLight = new THREE.PointLight( 0xffffff, intensity, no_light_distance, decay); 
+
+    			camera = new THREE.PerspectiveCamera( 20, window.innerWidth / window.innerHeight, 1, 10000 );
+                // Attach the light to the camera
+                camera.add( pointLight );
+
+                camera.position.z = 100;
+                camera.position.x = 100;
+                camera.position.y = 100;
+
+                // Make sure to do this, otherwise the light doesn't give off any light
+                // See also http://stackoverflow.com/a/29087983
+                scene.add(camera);
+    			
+                renderer = new THREE.WebGLRenderer();
+    			renderer.setSize( window.innerWidth, window.innerHeight );
+    			container.appendChild( renderer.domElement );
+                
+                controls = new THREE.OrbitControls( camera );
+                controls.addEventListener( 'change', updateControls );
+
+                stats = new Stats();
+                stats.domElement.style.position = 'absolute';
+                stats.domElement.style.top = '0px';
+                container.appendChild( stats.domElement );
+
+                // Hook up the callback functions
+                document.getElementById('base').addEventListener('change', handleAddBase, true);
+                document.getElementById('overlay').addEventListener('change', handleAddSpheres, true);
+                // when the mouse moves, call the given function
+                document.addEventListener( 'mousedown', onDocumentMouseMove, false );
+                
+                window.addEventListener( 'resize', onWindowResize, false );
+            }
+
+            function animate() {
+                requestAnimationFrame( animate );
+                render();
+                stats.update();
+            }
+            function render() {
+                camera.updateMatrixWorld();
+                renderer.render(scene, camera);
+            };
+            function updateControls() { 
+                controls.update(); 
+            }
+            function getMaxOfArray(numArray) {
+                return Math.max.apply(null, numArray);
+            }
+            function getMinOfArray(numArray) {
+                return Math.min.apply(null, numArray);
+            }           
+            function add_axes(){
+                var origin = new THREE.Vector3( 0, 0, 0 );
+                var length = 100;
+                var hex = 0xffff00;
+                
+                for (var i = 0; i < 3; i += 1){
+                    var d = [0, 0, 0];
+                    d[i] = 1;
+                    var dir = new THREE.Vector3( d[0], d[1], d[2] );
+                    scene.add( new THREE.ArrowHelper( dir, origin, length, hex ) );
+                }
+            }
+            function add_axes_labels(){
+                var material = new THREE.MeshBasicMaterial( {color: 0x0000ff} );
+                var scale_x = 0.2, scale_y = 0.2, scale_z = 0.2;
+                
+                var geometry = new THREE.TextGeometry( "T", {height: 2});
+                 
+                var text = new THREE.Mesh( geometry, material );
+                text.scale.set(scale_x, scale_y, scale_z);
+                text.position.x = 100;
+                text.position.y = 0;
+                text.position.z = 0;
+                scene.add( text );
+
+                var geometry = new THREE.TextGeometry( "ln(p)", {height: 2});
+                var text = new THREE.Mesh( geometry, material );
+                text.scale.set(scale_x, scale_y, scale_z);
+                text.position.x = -25;
+                text.position.y = 100;
+                text.rotation.z = -Math.PI/2.0;
+                text.position.z = 0;
+                scene.add( text );
+
+                var geometry = new THREE.TextGeometry( "x(1)", {height: 2});
+                var text = new THREE.Mesh( geometry, material );
+                text.scale.set(scale_x, scale_y, scale_z);
+                text.position.x = 0;
+                text.position.y = 0;
+                text.rotation.y = -Math.PI/2.0;
+                text.position.z = 100;
+                scene.add( text );
+            }
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize( window.innerWidth, window.innerHeight );
+            }
+    
+            // Based on:
+            // - https://stemkoski.github.io/Three.js/Mouse-Click.html
+            // - http://threejs.org/examples/webgl_interactive_cubes.html
+            function onDocumentMouseMove( event ) 
+            {
+                event.preventDefault();
+
+                // Only fire this code if there is at least one possible target for click
+                // and left button is down
+                if (click_targets.length > 0 && event.button === THREE.MOUSE.LEFT)
+                {
+                    // the following line would stop any other event handler from firing
+                    // (such as the mouse's TrackballControls)
+                    //event.preventDefault();
+
+                    // update the mouse variable
+                    mouse.x = ( event.clientX / window.innerWidth ) * 2 - 1;
+                    mouse.y = - ( event.clientY /  window.innerHeight ) * 2 + 1;
+                    
+                    // ------------------
+                    // find intersections
+                    // ------------------
+                    camera.updateMatrixWorld();
+                    raycaster.setFromCamera(mouse, camera);
+
+                    // create an array containing all objects in the scene with which the ray intersects
+                    var intersects = raycaster.intersectObjects( click_targets );
+                    
+                    // if there is one (or more) intersections
+                    if ( intersects.length > 0 )
+                    {
+                        console.log("Hit count: " + intersects.length );
+                        intersects[ 0 ].object.material.color.set( 0xff0000 );
+                        intersects[ 0 ].object.geometry.colorsNeedUpdate = true;
+                    }
+                }
+            }
+
+            function AddBase(json_data){
+                var colorMap = 'rainbow';
+                var numberOfColors = 512;
+                var xx = [], yy = [], zz = [];
+
+                /// Iterate over all the meshes in order to find the maximum and minimum values
+                for (var imesh = 0; imesh < json_data.length; imesh += 1)
+                {
+                    /// Vertices are array of x1,y1,z1,x2,y2,z2....
+                    for (var i = 0; i + 2 < json_data[imesh].vertices.length; i += 3){
+                        xx.push(json_data[imesh].vertices[i]);
+                        yy.push(json_data[imesh].vertices[i+1]);
+                        zz.push(json_data[imesh].vertices[i+2]);
+                    }
+                }
+                xmin = getMinOfArray(xx);
+                ymin = getMinOfArray(yy);
+                zmin = getMinOfArray(zz);
+                var zmax = getMaxOfArray(zz);
+
+                for (var imesh = 0; imesh < json_data.length; imesh += 1)
+                {
+                    obj= json_data[imesh];
+                    var geometry = new THREE.Geometry();
+
+                    lut = new THREE.Lut( colorMap, numberOfColors );
+                    lut.setMin( 0 );
+                    lut.setMax( zmax - zmin );
+
+                    /// Vertices are array of x1,y1,z1,x2,y2,z2....
+                    for (var i = 0; i + 2 < obj.vertices.length; i += 3){
+                        geometry.vertices.push(
+                            new THREE.Vector3( obj.vertices[i] - xmin,  obj.vertices[i+1] - ymin, obj.vertices[i+2] - zmin)
+                        );
+                    }
+
+                    // Vector of facets, first three in quad are indices for points forming facet, last in quad is always -1
+                    // This was for compatibility with JSC3D
+                    for (var i = 0; i + 3 < obj.facets.length; i += 4)
+                    {
+                        geometry.faces.push( new THREE.Face3( obj.facets[i],  obj.facets[i+1], obj.facets[i+2] ) );
+                    }
+                    geometry.computeFaceNormals();
+
+                    var faceIndices = [ 'a', 'b', 'c' ];
+
+                    // See http://mrdoob.github.io/three.js/examples/webgl_geometry_colors.html
+                    for ( var i = 0; i < geometry.faces.length; i ++ ) {
+                        f  = geometry.faces[ i ];
+                        for( var j = 0; j < 3; j++ ) {
+                            vertexIndex = f[ faceIndices[ j ] ];
+                            p = geometry.vertices[ vertexIndex ];
+                            color = lut.getColor( p.z );
+                            //console.log( "color: " + color.r + ' ' + color.g + ' ' + color.g );
+                            f.vertexColors[ j ] = color;
+                        }
+                    }
+                    var material = new THREE.MeshLambertMaterial( {
+                        side: THREE.DoubleSide,
+                        color: 0xF5F5F5,
+                        vertexColors: THREE.FaceColors
+                    } );
+                    var envelope = new THREE.Mesh( geometry, material );
+
+                    scene.add( envelope );
+                }
+            }
+            function AddSpheres(json_data){
+                for (var i = 0; i < json_data.x.length; i += 1){
+                    var material = new THREE.MeshLambertMaterial( {
+                        side: THREE.DoubleSide,
+                        color: 0xF5F5F5,
+                        vertexColors: THREE.FaceColors
+                    } );
+                    var geometry = new THREE.SphereGeometry( json_data.r[i], 32, 32 );
+                    var sphere = new THREE.Mesh( geometry, material );
+                    sphere.position.x = json_data.x[i]-xmin;
+                    sphere.position.y = json_data.y[i]-ymin;
+                    sphere.position.z = json_data.z[i]-zmin;
+                    scene.add( sphere );
+                    click_targets.push( sphere );
+                }
+            }
+            
+            // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+            function handleAddBase(evt) {
+                var files = evt.target.files;  // FileList object
+                var reader = new FileReader(); // Instantiate the reader 
+
+                // Closure to process the JSON data after loading
+                reader.onload = (function(theFile) {
+                    return function(e) {
+                        // Load the JSON data from the file, using either JSON library or jQuery
+                        // See http://stackoverflow.com/a/4935684
+                        var json_data = JSON && JSON.parse(e.target.result) || $.parseJSON(e.target.result);
+						// Populate
+                        AddBase(json_data);
+                    };
+                })(files[0]);
+                reader.readAsText(files[0]);// See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+            }
+            // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+            function handleAddSpheres(evt) {
+                var files = evt.target.files; // FileList object
+                var reader = new FileReader(); // Instantiate the reader
+
+                // Closure to process the JSON data after loading
+                reader.onload = (function(theFile) {
+                    return function(e) {
+                        
+                        // Load the JSON data from the file, using either JSON library or jQuery
+                        // See http://stackoverflow.com/a/4935684
+                        var json_data = JSON && JSON.parse(e.target.result) || $.parseJSON(e.target.result);
+
+                        AddSpheres(json_data);
+                    };
+                })(files[0]);
+                reader.readAsText(files[0]); // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+            }
+            
+		</script>
+	</body>
+</html>
