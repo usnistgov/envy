@@ -2,7 +2,7 @@ import CoolProp, math, numpy as np, matplotlib.pyplot as plt, json, pandas, os
 
 pair = ['PROPANE','DECANE']
 
-input_data = dict(N = 21, backend = 'REFPROP', fluid1 = pair[0], fluid2 = pair[1], p_cutoff = 7e4)
+input_data = dict(N = 31, backend = 'REFPROP', fluid1 = pair[0], fluid2 = pair[1], p_cutoff = 7e4)
 
 from scipy.interpolate import interp1d as Interpolate
 
@@ -18,31 +18,49 @@ for iii in range(input_data['N']-1):
     for x0 in [X0[iii], X0[iii+1]]:
 
         HEOS.set_mole_fractions([x0, 1 - x0])
+        PE = None
         try:
             HEOS.build_phase_envelope("dummy")
+            PE = HEOS.get_phase_envelope_data()
+            
         except ValueError as VE:
-            print(VE)
+            print('Error:', VE)
         
-        PE = HEOS.get_phase_envelope_data()
-        
-        # Find maximum pressure location
-        ipmax = np.argmax(PE.p)
+        # Find maximum pressure location by finding the first index where the slope changes
+        ipmax = -1
+        for i in range(1, len(PE.p)-1):
+            slope_left = PE.p[i] - PE.p[i-1]
+            slope_right = PE.p[i+1] - PE.p[i]
+            if slope_left*slope_right < 0: # slopes are different
+                ipmax = i
+                break
+        if ipmax == len(PE.p)-1:
+            raise ValueError('no local maximum in pressure found')
 
-        # Interpolate to find densities corresponding to cutoff pressure (if possible)
-        if np.min(PE.p[0:ipmax-1]) < input_data['p_cutoff'] < np.max(PE.p[0:ipmax-1]):
-            rhoymin = Interpolate(PE.p[0:ipmax-1], PE.rhomolar_vap[0:ipmax-1], kind = 'quadratic')([input_data['p_cutoff']])[0]
-        else:
-            rhoymin = np.min(PE.rhomolar_vap)*1.0000001
-        rhoymin = max(np.min(PE.rhomolar_vap), rhoymin)
+        plt.plot(np.log(1/np.array(PE.rhomolar_vap)), PE.p, 'o-')
 
-        if np.min(PE.p[ipmax+1::]) < input_data['p_cutoff'] < np.max(PE.p[ipmax+1::]):
-            pvap = np.array(PE.p[ipmax+1::])
-            rhoyvap = np.array(PE.rhomolar_vap[ipmax+1::])
-            rhoymax = 1/Interpolate(np.log(pvap), 1/rhoyvap, kind = 'linear')([np.log(input_data['p_cutoff'])])[0]
-        else:
-            rhoymax = np.max(PE.rhomolar_vap)*0.9999999
-        rhoymax = min(np.max(PE.rhomolar_vap), rhoymax)
+        rhoymin = np.min(PE.rhomolar_vap)*1.0000001
+        rhoymax = np.max(PE.rhomolar_vap)*0.9999999
 
+        try:
+            # Interpolate to find densities corresponding to cutoff pressure (if possible)
+            if np.min(PE.p[0:ipmax-1]) < input_data['p_cutoff'] < np.max(PE.p[0:ipmax-1]):
+                rhoymin = Interpolate(PE.p[0:ipmax-1], PE.rhomolar_vap[0:ipmax-1], kind = 'quadratic')([input_data['p_cutoff']])[0]
+            else:
+                rhoymin = np.min(PE.rhomolar_vap)*1.0000001
+            rhoymin = max(np.min(PE.rhomolar_vap), rhoymin)
+
+            if np.min(PE.p[ipmax+1::]) < input_data['p_cutoff'] < np.max(PE.p[ipmax+1::]):
+                pvap = np.array(PE.p[ipmax+1::])
+                rhoyvap = np.array(PE.rhomolar_vap[ipmax+1::])
+                rhoymax = 1/Interpolate(np.log(pvap), 1/rhoyvap, kind = 'linear')([np.log(input_data['p_cutoff'])])[0]
+            else:
+                rhoymax = np.max(PE.rhomolar_vap)*0.9999999
+            rhoymax = min(np.max(PE.rhomolar_vap), rhoymax)
+        except BaseException as BE:
+            print BE
+
+        print rhoymin, rhoymax
         rhoy = np.logspace(math.log10(rhoymin), math.log10(rhoymax), n)
         T = Interpolate(np.array(PE.rhomolar_vap), PE.T, kind = 'linear')(rhoy)
         logp = Interpolate(1/np.array(PE.rhomolar_vap), np.log(PE.p), kind = 'linear')(1/rhoy)
@@ -66,6 +84,9 @@ for iii in range(input_data['N']-1):
 
     meshes.append(dict(vertices = vertices, facets = facets))
 
+plt.yscale('log')
+plt.show()
+
 with open('env.json','w') as fp:
     json.dump(meshes, fp)
 
@@ -80,7 +101,7 @@ if os.path.exists(VLE_data_file):
     for _T, _p, _x in zip(T, p, x):
         metadata.append('T: {0:g} K<br>p: {1:g} kPa<br>x<sub>1</sub>: {2:g}'.format(_T, _p/1000.0, _x))
 
-    jj = dict(x = T.tolist(), y = (np.log(p)*50).tolist(), z = (x*100).tolist(), r = np.ones_like(x).tolist(), metadata = metadata)
+    jj = dict(x = T.tolist(), y = (np.log(p)*50).tolist(), z = (x*100).tolist(), r = (3*np.ones_like(x)).tolist(), metadata = metadata)
 
     with open('spheres.json','w') as fp:
         json.dump(jj, fp)
