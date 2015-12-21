@@ -2,28 +2,9 @@ import CoolProp, math, numpy as np, matplotlib.pyplot as plt, json, pandas, os
 
 pair = ['PROPANE','DECANE']
 
-input_data = dict(N = 21, backend = 'REFPROP', fluid1 = pair[0], fluid2 = pair[1], p_cutoff = 1e4)
+input_data = dict(N = 21, backend = 'REFPROP', fluid1 = pair[0], fluid2 = pair[1], p_cutoff = 7e4)
 
-def argmax(x):
-    return max(enumerate(x), key=lambda x:x[1])[0]
-        
-# Based on http://stackoverflow.com/a/17115473/1360263
-from bisect import bisect_right
-class Interpolate(object):
-    def __init__(self, x_list, y_list):
-        if any([y - x <= 0 for x, y in zip(x_list, x_list[1:])]):
-            # x_list must be in strictly ascending order - swap order if opposite
-            x_list,y_list = zip(*sorted(zip(x_list,y_list)))
-            
-        x_list = self.x_list = map(float, x_list)
-        y_list = self.y_list = map(float, y_list)
-        self.slopes = [(y2 - y1)/(x2 - x1) for x1, x2, y1, y2 in zip(x_list, x_list[1:], y_list, y_list[1:])]
-    def __call__(self, x):
-        o = []
-        for _ in x:
-            i = min(len(self.x_list)-2, bisect_right(self.x_list, _)-1)
-            o.append(self.y_list[i] + self.slopes[i] * (_ - self.x_list[i]))
-        return o
+from scipy.interpolate import interp1d as Interpolate
 
 HEOS = CoolProp.AbstractState(input_data['backend'],input_data['fluid1'] + '&' + input_data['fluid2'])
 
@@ -35,6 +16,7 @@ for iii in range(input_data['N']-1):
     n = 500
     data = []
     for x0 in [X0[iii], X0[iii+1]]:
+
         HEOS.set_mole_fractions([x0, 1 - x0])
         try:
             HEOS.build_phase_envelope("dummy")
@@ -42,20 +24,29 @@ for iii in range(input_data['N']-1):
             print(VE)
         
         PE = HEOS.get_phase_envelope_data()
+        
         # Find maximum pressure location
-        ipmax = argmax(PE.p)
+        ipmax = np.argmax(PE.p)
+
         # Interpolate to find densities corresponding to cutoff pressure (if possible)
-        if min(PE.p[0:ipmax-1]) < input_data['p_cutoff'] < np.max(PE.p[0:ipmax-1]):
-            rhoymin = Interpolate(PE.p[0:ipmax-1], PE.rhomolar_vap[0:ipmax-1])([input_data['p_cutoff']])[0]
+        if np.min(PE.p[0:ipmax-1]) < input_data['p_cutoff'] < np.max(PE.p[0:ipmax-1]):
+            rhoymin = Interpolate(PE.p[0:ipmax-1], PE.rhomolar_vap[0:ipmax-1], kind = 'quadratic')([input_data['p_cutoff']])[0]
         else:
-            rhoymin = np.min(PE.rhomolar_vap)
-        if min(PE.p[ipmax+1::]) < input_data['p_cutoff'] < np.max(PE.p[ipmax+1::]):
-            rhoymax = Interpolate(PE.p[ipmax+1::], PE.rhomolar_vap[ipmax+1::])([input_data['p_cutoff']])[0]
+            rhoymin = np.min(PE.rhomolar_vap)*1.0000001
+        rhoymin = max(np.min(PE.rhomolar_vap), rhoymin)
+
+        if np.min(PE.p[ipmax+1::]) < input_data['p_cutoff'] < np.max(PE.p[ipmax+1::]):
+            pvap = np.array(PE.p[ipmax+1::])
+            rhoyvap = np.array(PE.rhomolar_vap[ipmax+1::])
+            rhoymax = 1/Interpolate(np.log(pvap), 1/rhoyvap, kind = 'linear')([np.log(input_data['p_cutoff'])])[0]
         else:
-            rhoymax = np.max(PE.rhomolar_vap)
+            rhoymax = np.max(PE.rhomolar_vap)*0.9999999
+        rhoymax = min(np.max(PE.rhomolar_vap), rhoymax)
+
         rhoy = np.logspace(math.log10(rhoymin), math.log10(rhoymax), n)
-        T = Interpolate(PE.rhomolar_vap, PE.T)(rhoy)
-        logp = Interpolate(PE.rhomolar_vap, np.log(PE.p))(rhoy)
+        T = Interpolate(np.array(PE.rhomolar_vap), PE.T, kind = 'linear')(rhoy)
+        logp = Interpolate(1/np.array(PE.rhomolar_vap), np.log(PE.p), kind = 'linear')(1/rhoy)
+
         data.append((list(T), list(logp), rhoy))
 
     # Stitch the left (in composition) and right (in composition) parts together
