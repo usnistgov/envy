@@ -152,7 +152,7 @@
                 // See also http://stackoverflow.com/a/29087983
                 scene.add(camera);
     			
-                renderer = new THREE.WebGLRenderer();
+                renderer = new THREE.WebGLRenderer({antialias: true});
     			renderer.setSize( window.innerWidth, window.innerHeight );
                 renderer.setClearColor( 0xE8E8E8 );
     			container.appendChild( renderer.domElement );
