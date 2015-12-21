@@ -2,7 +2,7 @@ import CoolProp, math, numpy as np, matplotlib.pyplot as plt, json, pandas, os
 
 pair = ['PROPANE','DECANE']
 
-input_data = dict(N = 21, backend = 'REFPROP', fluid1 = pair[0], fluid2 = pair[1], p_cutoff = 1e5)
+input_data = dict(N = 21, backend = 'REFPROP', fluid1 = pair[0], fluid2 = pair[1], p_cutoff = 1e4)
 
 def argmax(x):
     return max(enumerate(x), key=lambda x:x[1])[0]
@@ -59,8 +59,8 @@ for iii in range(input_data['N']-1):
         data.append((list(T), list(logp), rhoy))
 
     # Stitch the left (in composition) and right (in composition) parts together
-    T = data[0][0]+data[1][0]
-    logp = data[0][1]+data[1][1]
+    T = data[0][0] + data[1][0]
+    logp = data[0][1] + data[1][1]
     z = list(X0[iii]*np.ones_like(data[0][0])) + list(X0[iii+1]*np.ones_like(data[0][0]))
 
     facets = []
@@ -85,7 +85,11 @@ if os.path.exists(VLE_data_file):
     df = df[mask].copy()
     T,p,x = df['T (K90)'], df['p (Pa)'], 1-df['x[0] (-)']
 
-    jj = dict(x = T.tolist(), y = (np.log(p)*50).tolist(), z = (x*100).tolist(), r = np.ones_like(x).tolist())
+    metadata = []
+    for _T, _p, _x in zip(T, p, x):
+        metadata.append('T: {0:g} K<br>p: {1:g} kPa<br>x<sub>1</sub>: {2:g}'.format(_T, _p/1000.0, _x))
+
+    jj = dict(x = T.tolist(), y = (np.log(p)*50).tolist(), z = (x*100).tolist(), r = np.ones_like(x).tolist(), metadata = metadata)
 
     with open('spheres.json','w') as fp:
         json.dump(jj, fp)

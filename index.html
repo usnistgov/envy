@@ -6,15 +6,18 @@
         <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
         <style>
             body {
-                font-family: Monospace;
+                font-family: "Trebuchet MS", "Helvetica", "Arial",  "Verdana", "sans-serif";
+                font-size: 75%;
                 background-color: #f0f0f0;
                 margin: 0px;
                 overflow: hidden;
             }
         </style>
-        
-	</head>
-	<body>
+        <style type="text/css">
+            .no-close .ui-dialog-titlebar-close {
+                display: none;
+            }
+        </style>
         <!-- 
         The copy_js.py script is used to collect the files from within threejs
         -->
@@ -25,6 +28,73 @@
         <script src="js/OrbitControls.js"></script>
         <script src="js/helvetiker_regular.typeface.js"></script>
         <script src="js/stats.min.js"></script> 
+        <!-- 
+        
+        -->
+        <script src="jquery/jquery-1.11.3.min.js"></script>
+        <link rel="stylesheet" href="jquery/jquery-ui-1.11.4.custom/jquery-ui.css">
+        <script src="jquery/jquery-ui-1.11.4.custom/jquery-ui.min.js"></script>
+
+        <script>
+          $(function() {
+            $( "#check1" )
+              .click(function( event ) {
+                console.log('check1')
+              });
+          });
+          $(function() {
+            $( "input[type=submit], button" )
+              .button()
+              .click(function( event ) {
+                console.log('hihi')
+                event.preventDefault();
+              });
+          });
+          $(function() {
+            $( "#dialog" ).dialog({
+              resizable: true,
+              //height: window.innerHeight*0.5,
+              width: window.innerWidth*0.25,
+              modal: false,
+              dialogClass: "no-close",
+              position: { my: "left center", at: "left center"},
+              open: function(){
+                $("#accordion").accordion({ 
+                    collapsible: true, 
+                    autoHeight: true 
+                  });
+              }
+            });
+          });
+        </script>
+	</head>
+	<body>
+
+        <div id="dialog" title="">
+            Point information:
+            <br>
+            <p>
+            <div id="point_metadata">
+                No point selected yet
+            </div>
+            </p>
+            <div id="accordion">
+                <h3>Information</h3>
+                <div>
+                <p>This program is used to visualize the phase envelopes for binary mixtures.  Click on a point (sphere) to obtain metadata about the selected point</p>
+                <p> Written by <a href="mailto:ian.bell@nist.gov">Ian Bell</a></p>
+                </div>
+                <!-- <h3>Options</h3>
+                <div>
+                <p><input type="submit" value="A submit button"></p>
+                <p><input type="checkbox" id="check1"><label for="check1">Axes</label></p>
+                <p>
+                Sed non urna. Donec et ante. Phasellus eu ligula. Vestibulum sit amet
+                purus.
+                </p>
+                </div> -->
+            </div>
+        </div>
 
 		<script>
 
@@ -39,6 +109,9 @@
             init();
             animate();
 
+            // Default color for sphere
+            var sphere_color = 0xF5F5F5;
+
             function init(){
 
                 container = document.createElement( 'div' );
@@ -49,7 +122,7 @@
                 jsonloaders.style.left = '100px';
                 jsonloaders.style.width = '100%';
                 jsonloaders.style.textAlign = 'left';
-                jsonloaders.innerHTML = 'Base loader: <input type="file" id="base" /> <br> Overlay loader: <input type="file" id="overlay" />';
+                jsonloaders.innerHTML = 'Phase envelope loader: <input type="file" id="base" /> <br> Point loader: <input type="file" id="overlay" />';
                 container.appendChild( jsonloaders );
                 
                 // Instantiate the scene
@@ -199,9 +272,19 @@
                     // if there is one (or more) intersections
                     if ( intersects.length > 0 )
                     {
-                        console.log("Hit count: " + intersects.length );
+                        // Reset the sphere color for all spheres
+                        for (var j = 0; j < click_targets.length; j++){
+                            click_targets[j].material.color.set(sphere_color);
+                            click_targets[j].geometry.colorsNeedUpdate = true;
+                        }
+
+                        // Make the selected sphere red
                         intersects[ 0 ].object.material.color.set( 0xff0000 );
                         intersects[ 0 ].object.geometry.colorsNeedUpdate = true;
+
+                        // Display the metadata in the dialog on the left
+                        var div = document.getElementById('point_metadata');
+                        div.innerHTML = intersects[0].object.metadata;
                     }
                 }
             }
@@ -277,7 +360,7 @@
                 for (var i = 0; i < json_data.x.length; i += 1){
                     var material = new THREE.MeshLambertMaterial( {
                         side: THREE.DoubleSide,
-                        color: 0xF5F5F5,
+                        color: sphere_color,
                         vertexColors: THREE.FaceColors
                     } );
                     var geometry = new THREE.SphereGeometry( json_data.r[i], 32, 32 );
@@ -285,6 +368,7 @@
                     sphere.position.x = json_data.x[i]-xmin;
                     sphere.position.y = json_data.y[i]-ymin;
                     sphere.position.z = json_data.z[i]-zmin;
+                    sphere.metadata = json_data.metadata[i]
                     scene.add( sphere );
                     click_targets.push( sphere );
                 }
@@ -305,7 +389,9 @@
                         AddBase(json_data);
                     };
                 })(files[0]);
-                reader.readAsText(files[0]);// See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+                if (files.length > 0){
+                    reader.readAsText(files[0]); // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+                }
             }
             // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
             function handleAddSpheres(evt) {
@@ -323,7 +409,9 @@
                         AddSpheres(json_data);
                     };
                 })(files[0]);
-                reader.readAsText(files[0]); // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+                if (files.length > 0){
+                    reader.readAsText(files[0]); // See http://www.html5rocks.com/en/tutorials/file/dndfiles/
+                }
             }
             
 		</script>
