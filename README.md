@@ -17,7 +17,12 @@ The goal of this project is to plot three-dimensional phase envelopes in the bro
 
 This project leverages the open-source packages:
   - [three.js](http://www.threejs.org)
-  - jQuery (will eventually for UI)
+  - [jQuery](https://jquery.com/)
+  - [jQueryUI](http://jqueryui.com/)
+
+## Debugging
+
+If you are having problems with WebGL, first [go to this link](http://webglreport.com/?v=1).  Make sure you don't have an error.  I found on my computer that installing newer drivers for my video card (ATI) fixed WebGL support in Firefox.
   
 ## License
 
