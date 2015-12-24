@@ -325,9 +325,15 @@
                         );
                     }
 
-                    // Vector of facets, first three in quad are indices for points forming facet, last in quad is always -1
-                    // This was for compatibility with JSC3D
-                    for (var i = 0; i + 3 < obj.facets.length; i += 4)
+                    // Vector of facets, first three are indices for points forming facet
+                    // In JSC3D, facet is given as a quad, where last in quad is always -1
+                    // We add backwards compatibility by cheching whether the 3rd element is -1
+                    var increment = 3;
+                    if (obj.facets[3] == -1){
+                        increment = 4;
+                    }
+
+                    for (var i = 0; i + (increment-1) < obj.facets.length; i += increment)
                     {
                         geometry.faces.push( new THREE.Face3( obj.facets[i],  obj.facets[i+1], obj.facets[i+2] ) );
                     }
