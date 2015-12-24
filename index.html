@@ -325,9 +325,9 @@
                         );
                     }
 
-                    // Vector of facets, first three are indices for points forming facet
+                    // Vector of facets, given as tuples of indices for points forming facet
                     // In JSC3D, facet is given as a quad, where last in quad is always -1
-                    // We add backwards compatibility by cheching whether the 3rd element is -1
+                    // We add backwards compatibility by checking whether the fourth element is -1
                     var increment = 3;
                     if (obj.facets[3] == -1){
                         increment = 4;
