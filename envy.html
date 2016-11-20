@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>ENVY ENVY</title>
+  <meta charset="utf-8" />
+  <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r79/three.min.js"></script>
+  <script type="text/javascript" src="https://threejs.org/examples/js/controls/OrbitControls.js"></script>
+  <script type="text/javascript" src="coolprop.js"></script>
+  
+</head>
+
+<body>
+<script type='text/javascript'>
+
+var coolprop_ready = false, construction_done = false;
+// Create a callback function that will fire once the async load of CoolProp is complete
+Module['onRuntimeInitialized'] = function() { console.log('CoolProp ready.'); coolprop_ready = true; };
+
+window.onload=function(){
+  var camera, scene, renderer, geometry, material, mesh;
+
+  init();
+  animate();
+
+  function linspace(minval, maxval, N) {
+    var increment = (maxval - minval) / (N - 1);
+    var y = [];
+    for (var i = 0; i < N; i++) {
+      y.push(minval + increment * i);
+    }
+    return y;
+  }
+
+  function make_line(points, numPoints, color) {
+
+    spline = new THREE.CatmullRomCurve3(points);
+
+    var geometry = new THREE.Geometry();
+    var splinePoints = spline.getPoints(numPoints);
+
+    for (var i = 0; i < splinePoints.length; i++) {
+      geometry.vertices.push(splinePoints[i]);
+    }
+
+    var line = new THREE.Line(geometry, new THREE.LineBasicMaterial({
+      color: color,
+    }));
+    return line;
+  }
+
+  function add_spiral(){
+    var t = linspace(0, 2 * Math.PI, 30);
+    var points = [];
+    for (var i = 0; i < t.length; i++) {
+      points.push(new THREE.Vector3(20 * Math.cos(t[i]), 10 * Math.sin(t[i]), 10 * t[i]));
+    }
+    line = make_line(points, 1000, 0x000000)
+    scene.add(line);
+  }
+  function add_grids(){
+    var width = 40,
+      Ngrid = 10;
+    // The grid for Y=0, this is the default for a GridHelper, though
+    // we shift the grid to have a corner at the origin
+    var gridYzero = new THREE.GridHelper(width, Ngrid);
+    gridYzero.position.set(width, 0, width);
+    scene.add(gridYzero);
+
+    var gridXzero = new THREE.GridHelper(width, Ngrid, new THREE.Color(0xff0000), new THREE.Color(0xffffff));
+    gridXzero.position.set(0, width, width);
+    gridXzero.rotation.z = -Math.PI / 2;
+    scene.add(gridXzero);
+
+    var gridZzero = new THREE.GridHelper(width, Ngrid, new THREE.Color(0xff0000), new THREE.Color(0xffffff));
+    gridZzero.position.set(width, width, 0);
+    gridZzero.rotation.x = -Math.PI / 2;
+    scene.add(gridZzero);
+  }
+
+  function init() {
+
+    scene = new THREE.Scene();
+
+    //camera = new THREE.OrthographicCamera(-40,40,-40,40,-40,40,-500,500);
+    camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 1, 10000);
+
+    scene.add(camera);
+    add_grids();
+
+    renderer = new THREE.WebGLRenderer({
+      antialias: true
+    });
+    renderer.setClearColor(0xE8E8E8);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+
+    controls = new THREE.OrbitControls(camera, renderer.domElement);
+
+    document.body.appendChild(renderer.domElement);
+
+    camera.position.set(700, 300, 500);
+
+    ax = new THREE.AxisHelper(10)
+    scene.add(ax)
+  }
+
+  function onWindowResize() {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  }
+
+  function animate() {
+    if (coolprop_ready)
+    {
+      if (!construction_done)
+      {
+        var Tnbp = Module.PropsSI("T","P",101325,"Q",0,"Water");
+        console.log('NBP of water (sanity check)', Tnbp);
+
+        
+        var AS = Module.factory('HEOS','n-Propane&n-Decane');
+        var x0 = linspace(0.001, 0.999, 100);
+        for (var i = 0; i < x0.length; i++){
+          var z = new Module.VectorDouble();
+          z.push_back(x0[i]); z.push_back(1-x0[i]);
+          AS.set_mole_fractions(z);
+          try{
+            AS.build_phase_envelope('none');
+            var PE = AS.get_phase_envelope_data();
+            // Plot the phase envelope
+            var points = [];
+            for (var j = 0; j < PE.T.size(); j++) {
+              points.push(new THREE.Vector3(PE.T.get(j), Math.log10(PE.p.get(j))*10, x0[i]*100));
+            }
+            
+            line = make_line(points, 1000, 0x000000)
+            scene.add(line);
+          }
+          catch(err){
+            console.log('err:' + err.message);
+          }
+        }
+        construction_done = true;
+      }
+    }
+    else{
+      console.log('awaiting coolprop load')
+    }
+
+    // Read more about requestAnimationFrame at http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
+    requestAnimationFrame(animate);
+
+    // Render the scene.
+    camera.updateMatrixWorld();
+    renderer.render(scene, camera);
+    controls.update();
+  }
+}
+
+</script>
+
+</body>
+</html>
