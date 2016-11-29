@@ -28,12 +28,13 @@
         <script src="js/OrbitControls.js"></script>
         <script src="js/helvetiker_regular.typeface.js"></script>
         <script src="js/stats.min.js"></script> 
-        <!-- 
-        
-        -->
         <script src="jquery/jquery-1.11.3.min.js"></script>
         <link rel="stylesheet" href="jquery/jquery-ui-1.11.4.custom/jquery-ui.css">
         <script src="jquery/jquery-ui-1.11.4.custom/jquery-ui.min.js"></script>
+
+        <!-- These are the data for the propane-decane mixture -->
+        <script src="propane_decane_envelope.js"></script>
+        <script src="propane_decane_spheres.js"></script>
 
         <script>
           $(function() {
@@ -84,19 +85,21 @@
                 <p>This program is used to visualize the phase envelopes for binary mixtures.  Click on a point (sphere) to obtain metadata about the selected point</p>
                 <p> Written by <a href="mailto:ian.bell@nist.gov">Ian Bell</a></p>
                 </div>
-                <!-- <h3>Options</h3>
+                <h3>Help!</h3>
                 <div>
-                <p><input type="submit" value="A submit button"></p>
-                <p><input type="checkbox" id="check1"><label for="check1">Axes</label></p>
-                <p>
-                Sed non urna. Donec et ante. Phasellus eu ligula. Vestibulum sit amet
-                purus.
-                </p>
-                </div> -->
+                <ul>
+                <li> Zoom in/out: mouse wheel
+                <li> Rotate: hold and drag left mouse button
+                <li> Pan: hold and drag right mouse button
+                </ul>
+                </div>
             </div>
         </div>
 
 		<script>
+
+            // If hard_coded is true, disable the ability to load json data from file
+            var hard_coded = true;  
 
             // A list of things that can be clicked on
             click_targets = [];
@@ -109,6 +112,11 @@
             init();
             animate();
 
+            if (hard_coded){
+                AddBase(C3_C10_envelope);
+                AddSpheres(C3_C10_spheres);
+            }
+
             // Default color for sphere
             var sphere_color = 0xF5F5F5;
 
@@ -117,13 +125,15 @@
                 container = document.createElement( 'div' );
                 document.body.appendChild( container );
 
-                var jsonloaders = document.createElement( 'div' );
-                jsonloaders.style.position = 'absolute';
-                jsonloaders.style.left = '100px';
-                jsonloaders.style.width = '100%';
-                jsonloaders.style.textAlign = 'left';
-                jsonloaders.innerHTML = 'Phase envelope loader: <input type="file" id="base" /> <br> Point loader: <input type="file" id="overlay" />';
-                container.appendChild( jsonloaders );
+                if (!hard_coded){
+                    var jsonloaders = document.createElement( 'div' );
+                    jsonloaders.style.position = 'absolute';
+                    jsonloaders.style.left = '100px';
+                    jsonloaders.style.width = '100%';
+                    jsonloaders.style.textAlign = 'left';
+                    jsonloaders.innerHTML = 'Phase envelope loader: <input type="file" id="base" /> <br> Point loader: <input type="file" id="overlay" />';
+                    container.appendChild( jsonloaders );
+                }
                 
                 // Instantiate the scene
     			scene = new THREE.Scene();
@@ -165,9 +175,11 @@
                 stats.domElement.style.top = '0px';
                 container.appendChild( stats.domElement );
 
-                // Hook up the callback functions
-                document.getElementById('base').addEventListener('change', handleAddBase, true);
-                document.getElementById('overlay').addEventListener('change', handleAddSpheres, true);
+                if (!hard_coded){
+                    // Hook up the callback functions
+                    document.getElementById('base').addEventListener('change', handleAddBase, true);
+                    document.getElementById('overlay').addEventListener('change', handleAddSpheres, true);
+                }
                 // when the mouse moves, call the given function
                 document.addEventListener( 'mousedown', onDocumentMouseMove, false );
                 
